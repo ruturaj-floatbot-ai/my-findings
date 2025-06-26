@@ -1,0 +1,684 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive Market Landscape Analysis for Floatbot.ai</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Chosen Palette: Warm Harmony -->
+    <!-- Application Structure Plan: The application is designed as an interactive dashboard to transform the static report into a dynamic BDR tool. The structure includes: 1) Top-level summary cards for an immediate overview of the landscape (total companies, customers, partners, vendors). 2) A visual breakdown via a donut chart for quick proportional analysis. 3) Core interactive controls (search and category filters) to allow the user to instantly find specific companies or view specific segments. 4) A responsive card grid to display companies, providing key info at a glance. 5) A modal popup for detailed analysis, which keeps the main interface clean by showing details only on demand. This task-oriented design directly supports the BDR's workflow of enriching company data by making information retrieval and categorization fast and intuitive. -->
+    <!-- Visualization & Content Choices: 
+        - Report Info: Aggregate counts of each category -> Goal: Inform -> Viz/Method: Dynamic statistic cards (HTML/Tailwind) -> Interaction: None -> Justification: Provides a quick, scannable summary of the entire dataset.
+        - Report Info: Proportional breakdown of categories -> Goal: Compare -> Viz/Method: Donut Chart (Chart.js/Canvas) -> Interaction: Hover tooltips -> Justification: Offers an immediate visual understanding of the market composition, which is more impactful than text alone.
+        - Report Info: Full company list -> Goal: Organize/Explore -> Viz/Method: Interactive Card Grid (HTML/Tailwind) -> Interaction: Click to view details, filterable, searchable -> Justification: Transforms the static list into a searchable, filterable database, which is the core functional requirement for the BDR.
+        - Report Info: Detailed analysis for each company -> Goal: Inform -> Viz/Method: Modal Popup (HTML/Tailwind/JS) -> Interaction: Click to open/close -> Justification: Hides lengthy text to prevent clutter, presenting deep-dive information only when requested by the user.
+    -->
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #FDFBF8; /* Warm off-white */
+        }
+        .chart-container {
+            position: relative;
+            margin: auto;
+            height: 300px;
+            width: 100%;
+            max-width: 400px;
+        }
+        .modal {
+            transition: opacity 0.25s ease;
+        }
+        .modal-content {
+            transition: transform 0.25s ease;
+        }
+        .card {
+            transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+        }
+        .card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        }
+        .filter-btn.active {
+            background-color: #4A5568; /* Darker Slate */
+            color: #FFFFFF;
+            font-weight: 600;
+        }
+    </style>
+</head>
+<body class="text-gray-800">
+
+    <div class="container mx-auto p-4 md:p-8">
+        <header class="text-center mb-8">
+            <h1 class="text-3xl md:text-4xl font-bold text-gray-900">Market Landscape Analysis</h1>
+            <p class="text-lg text-gray-600 mt-2">Interactive Dashboard for Floatbot.ai</p>
+        </header>
+
+        <main>
+            <!-- Summary Section -->
+            <section id="summary" class="mb-10">
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                    <div class="bg-white p-6 rounded-xl border border-gray-200 text-center">
+                        <h3 class="text-gray-500 text-sm font-medium uppercase tracking-wider">Total Companies</h3>
+                        <p id="total-companies" class="text-4xl font-bold text-gray-800 mt-2">0</p>
+                    </div>
+                    <div class="bg-white p-6 rounded-xl border border-gray-200 text-center">
+                        <h3 class="text-gray-500 text-sm font-medium uppercase tracking-wider">Customers</h3>
+                        <p id="total-customers" class="text-4xl font-bold text-teal-600 mt-2">0</p>
+                    </div>
+                    <div class="bg-white p-6 rounded-xl border border-gray-200 text-center">
+                        <h3 class="text-gray-500 text-sm font-medium uppercase tracking-wider">Partners</h3>
+                        <p id="total-partners" class="text-4xl font-bold text-sky-600 mt-2">0</p>
+                    </div>
+                    <div class="bg-white p-6 rounded-xl border border-gray-200 text-center">
+                        <h3 class="text-gray-500 text-sm font-medium uppercase tracking-wider">Vendors (Competitors)</h3>
+                        <p id="total-vendors" class="text-4xl font-bold text-rose-600 mt-2">0</p>
+                    </div>
+                </div>
+            </section>
+            
+            <!-- Visualization & Main Content Section -->
+            <div class="bg-white p-4 sm:p-6 md:p-8 rounded-2xl border border-gray-200">
+                <div class="lg:flex lg:space-x-8">
+                     <!-- Chart & Intro -->
+                    <div class="lg:w-1/3 mb-8 lg:mb-0">
+                        <h2 class="text-2xl font-bold text-gray-800 mb-2">Market Overview</h2>
+                        <p class="text-gray-600 mb-6">
+                            This section provides a high-level visual breakdown of the competitive landscape. The donut chart illustrates the proportion of potential Customers, Partners, and Vendors (Competitors) within the analyzed list of companies. Use the interactive filters and search below to explore each company in detail.
+                        </p>
+                        <div class="chart-container">
+                            <canvas id="categoryChart"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- Company Explorer -->
+                    <div class="lg:w-2/3">
+                        <h2 class="text-2xl font-bold text-gray-800 mb-4">Company Explorer</h2>
+                        <div class="mb-6">
+                            <div class="flex flex-col sm:flex-row gap-4">
+                                <input type="text" id="search-input" placeholder="Search by company name..." class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-500">
+                            </div>
+                            <div id="filters" class="flex flex-wrap gap-2 mt-4">
+                                <button data-filter="all" class="filter-btn active px-4 py-2 bg-gray-200 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-300 transition-colors">All</button>
+                                <button data-filter="Customer" class="filter-btn px-4 py-2 bg-gray-200 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-300 transition-colors">Customers</button>
+                                <button data-filter="Partner" class="filter-btn px-4 py-2 bg-gray-200 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-300 transition-colors">Partners</button>
+                                <button data-filter="Vendor (Competitor)" class="filter-btn px-4 py-2 bg-gray-200 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-300 transition-colors">Vendors</button>
+                            </div>
+                        </div>
+                        <div id="company-grid" class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 h-[60vh] overflow-y-auto pr-2">
+                        </div>
+                         <p id="no-results" class="text-center text-gray-500 mt-8 hidden">No companies match your search or filter.</p>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Modal -->
+    <div id="company-modal" class="modal fixed inset-0 z-50 flex items-center justify-center p-4 bg-black bg-opacity-50 opacity-0 pointer-events-none">
+        <div id="modal-content" class="modal-content bg-white w-full max-w-2xl max-h-[90vh] rounded-2xl shadow-xl transform scale-95">
+            <div class="flex justify-between items-center p-4 sm:p-6 border-b border-gray-200">
+                <div>
+                    <h2 id="modal-title" class="text-xl sm:text-2xl font-bold text-gray-900"></h2>
+                    <p id="modal-industry" class="text-sm text-gray-500"></p>
+                </div>
+                <button id="close-modal" class="text-gray-400 hover:text-gray-600">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+            <div class="p-4 sm:p-6 overflow-y-auto max-h-[calc(90vh-140px)]">
+                 <h3 class="text-lg font-semibold text-gray-800 mb-2">Analysis</h3>
+                <div id="modal-analysis" class="prose max-w-none text-gray-600"></div>
+            </div>
+             <div class="p-4 sm:p-6 border-t border-gray-200">
+                 <span id="modal-category" class="px-3 py-1 text-sm font-medium rounded-full"></span>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const companiesData = [
+            { name: "1-888-GO-ANSWER!", industry: "telecommunications", category: "Customer", analysis: "Specializes in providing 24/7 live virtual receptionist and web chat services, explicitly stating a policy of 'Real people only. Robots not allowed.' This makes them a prime customer, as Floatbot.ai's agent-assist and co-pilot features can enhance their human agents' efficiency without replacing them, fitting their 'real people' ethos while improving service." },
+            { name: "360 Direct Access", industry: "information technology & services", category: "Customer", analysis: "Provides inclusive customer service solutions for the deaf community through video calling and sign language. They do not compete in the voice-first AI space. They are a potential customer for internal operational automation (e.g., HR or IT support chatbots) rather than their core external service." },
+            { name: "8x8, Inc.", industry: "information technology & services", category: "Vendor (Competitor)", analysis: "Offers the '8x8 Intelligent Customer Assistant,' an AI-powered virtual agent solution for both voice and digital channels. They are a direct competitor, offering voicebots, chatbots, and conversational AI solutions for contact centers, a core market for Floatbot.ai." },
+            { name: "ACV Auctions", industry: "information technology & services", category: "Vendor (Competitor)", analysis: "A digital automotive marketplace that uses an 'AI voice assistant' and 'conversational AI' to assist dealerships with customer interaction and appointment scheduling. They are a competitor with a specialized vertical focus." },
+            { name: "Afiniti", industry: "information technology & services", category: "Vendor (Competitor)", analysis: "Offers 'eXperienceAI' solutions including an 'Omnichannel Conversation Bot' and 'Conversational Voicebot & Chatbot'. Their focus on dynamic optimization of customer journeys makes them a sophisticated competitor in the contact center AI space." },
+            { name: "Airbnb", industry: "information technology & services", category: "Customer", analysis: "Utilizes AI chatbots for guest communication but relies on third-party providers. As a large-scale consumer of conversational AI technology, Airbnb is a potential customer, validating the market need in the hospitality sector." },
+            { name: "Airmeez Inc", industry: "telecommunications", category: "Vendor (Competitor)", analysis: "Offers 'AI-Powered Customer Engagement Solutions' with a no-code environment for building IVAs and chatbots. Their no-code approach and focus on contact center workflows make them a direct competitor." },
+            { name: "Akamai Technologies", industry: "information technology & services", category: "Customer", analysis: "Primarily a CDN and cybersecurity company. While they may use AI internally (e.g., for data discovery), they do not offer competing conversational AI products. They are a potential customer for internal operational efficiency tools." },
+            { name: "Alarm.com", industry: "information technology & services", category: "Customer", analysis: "Integrates an AI chatbot into their mobile app for user support and guidance. As a consumer of AI technology to enhance their product, they are a potential customer, demonstrating a use case for embedding AI within existing applications." },
+            { name: "Alaska Communications", industry: "telecommunications", category: "Customer", analysis: "A traditional telecommunications provider offering voice services. They do not appear to offer conversational AI and are a prime customer candidate for automating high-volume inquiries like billing and support." },
+            { name: "Alhena", industry: "information technology & services", category: "Vendor (Competitor)", analysis: "Offers 'Alhena AI,' a Generative AI Chatbot Solution specifically for customer service and sales in eCommerce. They are a direct competitor in the generative AI chatbot space." },
+            { name: "Alithya", industry: "information technology & services", category: "Vendor (Competitor)", analysis: "An IT consultancy and Microsoft Solutions Partner that implements AI solutions, including generative AI and chatbots. They compete on AI implementation projects. A potential for partnership exists if they recommend Floatbot.ai as a specialized tool." },
+            { name: "ALLO Communications", industry: "telecommunications", category: "Vendor (Competitor)", analysis: "Associated with 'AlloBot,' a conversational AI solution for omnichannel customer interactions. An explicit comparison to Floatbot.ai in source material highlights a direct, head-to-head rivalry." },
+            { name: "Alorica Clark Philippines Inc", industry: "information technology & services", category: "Vendor (Competitor)", analysis: "A major BPO that offers its own 'Conversational AI' solutions ('Virtual Assistant (AVA)', 'evoAI™'). As a large service provider developing their own AI, they are a direct competitor in Floatbot.ai's target market." },
+            { name: "Alter New Media", industry: "information technology & services", category: "Vendor (Competitor)", analysis: "Provides 'Conversational Bots' (chatbots and voicebots) with a focus on integrating AI-driven hyper-personalization into marketing and sales automation, making them a competitor." },
+            { name: "Altice USA", industry: "telecommunications", category: "Customer", analysis: "A telecom company that consumes AI solutions from Google Cloud and uses an in-house assistant ('AVA') to improve customer service. They are a user, not a seller, of conversational AI, making them a potential customer." },
+            { name: "Alvaria", industry: "information technology & services", category: "Vendor (Competitor)", analysis: "A known contact center solution provider that offers voicebot and conversational AI capabilities within their 'Alvaria CXP' platform. They are a direct competitor." },
+            { name: "Alvaria Inc", industry: "information technology & services", category: "Vendor (Competitor)", analysis: "Duplicate of Alvaria. Direct competitor." },
+            { name: "Amazon", industry: "information technology & services", category: "Vendor (Competitor)", analysis: "Through AWS, Amazon provides foundational conversational AI services like Amazon Lex and Amazon Connect. They are an infrastructure/platform competitor, providing the building blocks for other AI solutions." },
+            { name: "Amelia", industry: "information technology & services", category: "Vendor (Competitor)", analysis: "Positions itself as 'The Leader in Conversational AI' with proprietary voice AI and agentic architecture. They are a direct and significant competitor targeting the same key industries as Floatbot.ai." },
+            { name: "AmplifAI Solutions Inc", industry: "information technology & services", category: "Partner", analysis: "Focuses on unifying performance data and providing AI-powered coaching and gamification for human agents. Their service is complementary to Floatbot.ai's automation, creating a strong potential for a strategic partnership." },
+            { name: "Angi", industry: "information technology & services", category: "Customer", analysis: "A platform connecting consumers with home service professionals. They are a potential customer for automating service bookings, customer inquiries, and lead qualification for their network." },
+            { name: "AppFolio", industry: "information technology & services", category: "Vendor (Competitor)", analysis: "Offers 'Lisa,' an AI Leasing Assistant for the property management industry. They are a competitor with a highly specialized, niche AI agent." },
+            { name: "Applied Labs", industry: "information technology & services", category: "Vendor (Competitor)", analysis: "Offers AI support agents across email, phone, and chat with a focus on high accuracy and enterprise security (SOC 2, HIPAA). A direct competitor in the multi-channel support space." },
+            { name: "Aress Software and Education Technologies (P) Ltd", industry: "information technology & services", category: "Vendor (Competitor)", analysis: "Offers conversational AI and chatbot development services across multiple industries. They compete as a service provider, contrasting with Floatbot.ai's platform-based (SaaS) model." },
+            { name: "Articulate Global, LLC", industry: "information technology & services", category: "Customer", analysis: "Integrates an AI Assistant into its e-learning course creation tools to boost productivity. They are a user of AI for internal product enhancement, not a competitor. Potential customer for internal support bots." },
+            { name: "ASAPP", industry: "information technology & services", category: "Vendor (Competitor)", analysis: "Offers the 'GenerativeAgent® Platform' for resolving complex customer service issues, with a unique 'human-AI collaboration' model. A direct and highly sophisticated competitor." },
+            { name: "Aspect Software", industry: "information technology & services", category: "Vendor (Competitor)", analysis: "An established contact center software provider. It's highly probable they offer integrated conversational AI solutions, making them a competitor in the broader market." },
+            { name: "assembledhq.com", industry: "information technology & services", category: "Vendor (Competitor)", analysis: "Offers 'Assist AI Agent for Voice' to automate phone support with a no-code workflow builder. A direct competitor in the AI voice agent space." },
+            { name: "AT&T", industry: "telecommunications", category: "Vendor (Competitor)", analysis: "Through a partnership with RingCentral, AT&T offers an AI-powered Contact Center solution. As a major telecom integrating AI into their service portfolio, they are a competitor." },
+            { name: "Atlas", industry: "information technology & services", category: "Vendor (Competitor)", analysis: "Offers a conversational AI chatbot for document insights and qualitative data analysis, powered by OpenAI. They compete in the specialized area of internal knowledge management, overlapping with Floatbot.ai's RAG capabilities." },
+            { name: "ATN International", industry: "telecommunications", category: "Customer", analysis: "A leading provider of communication infrastructure and services. As a traditional telecom, they are a prime customer candidate for automating their customer service operations." },
+            { name: "Audible, Inc.", industry: "information technology & services", category: "Customer", analysis: "Uses AI for content creation (narration, translation) and internal search. While a user of AI, their application is not in conversational customer service, making them a potential customer for support automation." },
+            { name: "AudioCodes", industry: "telecommunications", category: "Partner", analysis: "Provides the 'VoiceAI Connect solution,' a communication hub that connects any bot framework to any telephony system. Their vendor-agnostic approach makes them a strong potential partner, providing the 'voice connectivity' to Floatbot.ai's 'AI brain'." },
+            { name: "Aura", industry: "information technology & services", category: "Vendor (Competitor)", analysis: "Offers 'AuraChat.Ai,' an enterprise AI platform focused on competitive intelligence and sales automation across phone, video, and messaging. A direct competitor with a strong sales focus." },
+            { name: "automattic", industry: "information technology & services", category: "Customer", analysis: "Known for web publishing tools like WordPress.com. With a massive user base, they are a significant potential customer for automating customer support at scale." },
+            { name: "Avanade", industry: "information technology & services", category: "Vendor (Competitor)", analysis: "An IT consultancy that implements AI solutions using Microsoft's stack. They compete on service-oriented AI projects but could be a potential partner, recommending Floatbot.ai for specialized needs." },
+            { name: "Avanade, Inc", industry: "information technology & services", category: "Vendor (Competitor)", analysis: "Duplicate of Avanade. Competitor." },
+            { name: "Avenue 81, Inc.", industry: "information technology & services", category: "Customer", analysis: "An IT & services company. With no indication of their own AI offerings, they are a potential customer for Floatbot.ai to improve their own operations or to offer as a solution to their clients." },
+            { name: "AvidXchange", industry: "information technology & services", category: "Vendor (Competitor)", analysis: "Provides AI-powered automation for accounts payable and financial processes. They compete in the specialized area of financial workflow automation, overlapping with Floatbot.ai's capabilities." },
+            { name: "AWS", industry: "IT Services and IT Consulting", category: "Vendor (Competitor)", analysis: "Duplicate of Amazon. Provides foundational AI infrastructure like Amazon Lex and Connect, making them a platform-level competitor." },
+            { name: "Balto", industry: "information technology & services", category: "Partner", analysis: "Offers real-time guidance and coaching for human phone reps. Their focus on augmenting human performance is complementary to Floatbot.ai's automation, making them a strong potential partner." },
+            { name: "Baltosoftware", industry: "information technology & services", category: "Partner", analysis: "Duplicate of Balto. Potential partner." },
+            { name: "Bayside Support Services", industry: "information technology & services", category: "Customer", analysis: "An IT support services provider. They are a potential customer to use conversational AI to enhance their own service delivery or as a white-label solution for their clients." },
+            { name: "Bill.com", industry: "information technology & services", category: "Vendor (Competitor)", analysis: "Offers AI-powered automation for financial processes like bill pay and expense management. Competes in the financial automation space." },
+            { name: "Bizzabo", industry: "information technology & services", category: "Customer", analysis: "An event management platform that integrates with third-party chatbot software. As a consumer of AI, not a developer, they are a potential customer for automating attendee support." },
+            { name: "Black Box Corporation", industry: "information technology & services", category: "Vendor (Competitor)", analysis: "Offers 'BLACKBOX AI Web Chat,' a conversational AI interface focused on coding assistance and research. A competitor with a specialized, developer-focused application." },
+            { name: "Blue Stream Fiber", industry: "telecommunications", category: "Customer", analysis: "A telecom provider. Prime customer candidate for automating customer support, billing, and sales processes." },
+            { name: "BluIP", industry: "telecommunications", category: "Vendor (Competitor)", analysis: "Offers 'AIVA Connect®,' an AI Virtual Assistant for conversational AI across voice and digital. A direct competitor." },
+            { name: "Borwood International", industry: "information technology & services", category: "Customer", analysis: "An IT & services company. Potential customer for using conversational AI internally or as a white-label solution." },
+            { name: "Bosch", industry: "information technology & services", category: "Vendor (Competitor)", analysis: "Provides a specialized 'AI-Based Elevator Emergency Service' using a voice bot for real-time translation. Competitor with a highly specialized, mission-critical voice AI application." },
+            { name: "BridgePointe Technologies", industry: "information technology & services", category: "Vendor (Competitor)", analysis: "A consultancy for 'Contact Center AI'. They compete on AI implementation projects and could be a potential partner." },
+            { name: "Broadband Dynamics", industry: "telecommunications", category: "Customer", analysis: "A telecom company. Prime customer candidate for automating high-volume customer interactions." },
+            { name: "Broadvoice Inc.", industry: "telecommunications", category: "Vendor (Competitor)", analysis: "Offers 'Broadvoice AI' with natural language voice bots for automating responses and tasks. A direct competitor." },
+            { name: "Bucher + Suter", industry: "telecommunications", category: "Vendor (Competitor)", analysis: "Offers conversational AI solutions by partnering with major platforms like Cognigy and Cisco. Competes via integrated partner offerings." },
+            { name: "C3NTRO Telecom", industry: "information technology & services", category: "Customer", analysis: "A telecom company. Prime candidate for customer service automation." },
+            { name: "Calabrio Inc", industry: "information technology & services", category: "Partner", analysis: "Offers a 'Chatbot Analytics Platform' to analyze and optimize bot performance. Their analytics service is complementary to Floatbot.ai's agent creation platform, making them a strong potential partner." },
+            { name: "Call Simulator Inc", industry: "information technology & services", category: "Partner", analysis: "Provides an AI platform for role-play training simulations for human agents. Their focus on training is complementary to Floatbot.ai's live automation, creating a strong partnership opportunity." },
+            { name: "Caller ID Reputation®", industry: "information technology & services", category: "Customer", analysis: "An IT & services company. Potential customer for using conversational AI to enhance their own operations." },
+            { name: "CallMiner Inc", industry: "information technology & services", category: "Vendor (Competitor)", analysis: "Acquired VOCALLS, a voice-first conversational AI platform. Now a direct competitor combining conversation intelligence with virtual agents." },
+            { name: "CallTools", industry: "telecommunications", category: "Vendor (Competitor)", analysis: "Provides 'AI call tools' and 'AI phone call assistants' for call centers. A direct competitor in call automation." },
+            { name: "CallTower", industry: "telecommunications", category: "Vendor (Competitor)", analysis: "Expanded into conversational AI by acquiring Inoria. They offer chatbots, voicebots, and Agent Assist solutions, making them a competitor." },
+            { name: "CallTrackingMetrics", industry: "telecommunications", category: "Partner", analysis: "Offers AI-powered call analysis, transcription, and scoring for sales and marketing. Their analytics and coaching tools are complementary, making them a potential partner." },
+            { name: "Calltree", industry: "information technology & services", category: "Customer", analysis: "An IT & services company. Potential customer for using AI to improve their own service delivery." },
+            { name: "capacity.ai", industry: "information technology & services", category: "Vendor (Competitor)", analysis: "Offers a comprehensive conversational AI platform for automated self-service and agent assist across all channels. A direct competitor." },
+            { name: "CARFAX Inc", industry: "information technology & services", category: "Customer", analysis: "Known for vehicle history reports. Potential customer for automating their customer service inquiries." },
+            { name: "CarGurus", industry: "information technology & services", category: "Vendor (Competitor)", analysis: "An automotive marketplace that has launched an AI-powered conversational search experience. A competitor with a specialized search application." },
+            { name: "Cart.com Inc", industry: "information technology & services", category: "Customer", analysis: "An e-commerce platform provider. A potential customer for using conversational AI to enhance the shopping journey for their clients." },
+            { name: "Cartesia", industry: "information technology & services", category: "Partner", analysis: "Provides real-time, ultra-realistic generative voice APIs. Their advanced voice synthesis technology is complementary and makes them a strong potential partner to enhance Floatbot.ai's voice agents." },
+            { name: "Carvana Co.", industry: "information technology & services", category: "Vendor (Competitor)", analysis: "Leverages an online chatbot, 'Sebastian,' to enhance the customer experience in car sales. A competitor with a specialized application in automotive retail." },
+            { name: "CaseGuard", industry: "information technology & services", category: "Partner", analysis: "Offers AI redaction software for video, audio, and documents. Their security and compliance focus is complementary, making them a potential partner to enhance data privacy in Floatbot.ai's interactions." },
+            { name: "CAT Technologies Argentina", industry: "telecommunications", category: "Vendor (Competitor)", analysis: "Offers a chatbot platform and voice analytics solutions for BPO and customer experience. A direct competitor in Floatbot.ai's target market." },
+            { name: "CCT Deutschland GmbH", industry: "information technology & services", category: "Vendor (Competitor)", analysis: "Offers chatbot and voicebot solutions via their 'BOTfriends X' conversational AI platform. A direct competitor." },
+            { name: "Cekura", industry: "information technology & services", category: "Partner", analysis: "Provides a comprehensive testing, monitoring, and QA solution for voice AI agents. Their focus on quality assurance is complementary, making them a strong potential partner." },
+            { name: "Centrical", industry: "information technology & services", category: "Customer", analysis: "An IT & services company. Potential customer for using AI to improve their own operational efficiency." },
+            { name: "Charter Communications, Inc.", industry: "telecommunications", category: "Customer", analysis: "A telecom company that uses AI to assist agents and improve customer service. As a consumer of AI, not a seller, they are a potential customer." },
+            { name: "Cinareo", industry: "information technology & services", category: "Customer", analysis: "An IT & services company. Potential customer for using conversational AI internally or as a white-label solution." },
+            { name: "Cisco Systems, Inc.", industry: "information technology & services", category: "Vendor (Competitor)", analysis: "Offers 'Cisco AI Chatbots' for contact centers and integrates with major AI platforms. A significant competitor in the contact center AI space." },
+            { name: "Cityside Fiber", industry: "telecommunications", category: "Customer", analysis: "A telecom provider. Prime customer candidate for automating customer support and operational tasks." },
+            { name: "ClearMash solutions Ltd", industry: "information technology & services", category: "Vendor (Competitor)", analysis: "Offers AI-powered Q&A and self-service solutions with a focus on high accuracy. A direct competitor." },
+            { name: "Clearwave Fiber", industry: "telecommunications", category: "Customer", analysis: "A telecom provider. Prime customer candidate for customer service automation." },
+            { name: "C-lect Consulting", industry: "telecommunications", category: "Customer", analysis: "A telecom consulting firm. While they may recommend AI, they don't develop it. Potential customer or channel partner." },
+            { name: "CloudCX", industry: "information technology & services", category: "Customer", analysis: "An IT & services company. Appears to be a consumer of AI platforms, not a developer, making them a potential customer." },
+            { name: "Cognigy", industry: "information technology & services", category: "Vendor (Competitor)", analysis: "A direct and major competitor offering 'Voice AI Agents' with a focus on empathetic, lifelike voices and broad integration capabilities." },
+            { name: "Cohesity", industry: "information technology & services", category: "Vendor (Competitor)", analysis: "Offers 'Cohesity Gaia,' an AI-powered conversational assistant for internal enterprise data and document insights. Competes in the internal knowledge management space." },
+            { name: "CollaborationRoom.Ai", industry: "information technology & services", category: "Partner", analysis: "Provides AI-powered tools for internal team collaboration and coaching. Their focus on internal productivity is complementary to Floatbot.ai's external-facing automation, making them a potential partner." },
+            { name: "CommBox", industry: "information technology & services", category: "Vendor (Competitor)", analysis: "Offers an AI-powered, omnichannel customer experience platform with voice bots and chatbots. A direct competitor." },
+            { name: "CommunityWFM Inc", industry: "information technology & services", category: "Partner", analysis: "Provides cloud workforce management (WFM) software. They don't develop AI but integrate with it, making them a strong potential partner to create a holistic contact center solution." },
+            { name: "Concentrix Corporation", industry: "information technology & services", category: "Vendor (Competitor)", analysis: "A major global CX provider that designs, builds, and runs self-service AI bots (chat and voice) on an enterprise scale. A direct and significant competitor." },
+            { name: "Conduent", industry: "information technology & services", category: "Customer", analysis: "A large business process services company. A prime candidate to use conversational AI to enhance their service offerings and internal operations." },
+            { name: "Contact Center Compliance Corporation", industry: "information technology & services", category: "Customer", analysis: "A company focused on contact center compliance. Potential customer for using Floatbot.ai's AI to ensure compliance in automated conversations." },
+            { name: "CONTENT GURU LIMITED", industry: "information technology & services", category: "Vendor (Competitor)", analysis: "Offers the 'brain® AI orchestration layer' for Cloud CX solutions, including conversational AI and agent assist. A direct and cutting-edge competitor." },
+            { name: "Convoso", industry: "information technology & services", category: "Vendor (Competitor)", analysis: "Offers 'Voso.ai,' an AI-powered virtual agent software for call centers with a strong focus on sales and lead qualification. A direct competitor." },
+            { name: "Coval", industry: "information technology & services", category: "Partner", analysis: "Provides simulation, evaluation, and monitoring solutions for voice AI agents. Their QA focus is complementary, making them a potential partner." },
+            { name: "CoverMyMeds", industry: "information technology & services", category: "Customer", analysis: "Uses a virtual assistant for product support in the healthcare industry. As a consumer of AI, they are a potential customer for more advanced patient interaction automation." },
+            { name: "Covisian", industry: "information technology & services", category: "Vendor (Competitor)", analysis: "Implements conversational AI solutions (chatbots and voicebots) across healthcare and finance. A direct competitor." },
+            { name: "Creovai", industry: "information technology & services", category: "Partner", analysis: "Offers conversation intelligence and real-time agent assist to analyze customer conversations. Their analytics focus is complementary, making them a potential partner." },
+            { name: "Cresta", industry: "information technology & services", category: "Vendor (Competitor)", analysis: "Offers 'Cresta AI Agent' for human-like conversations across channels, leveraging LLMs. A direct and advanced competitor." },
+            { name: "Cricut", industry: "information technology & services", category: "Customer", analysis: "An IT & services company. Potential customer for using AI to improve their own operational efficiency." },
+            { name: "CSG Systems Inc", industry: "information technology & services", category: "Vendor (Competitor)", analysis: "Offers 'Conversational AI Software for Sales & Customer Service' with a focus on multi-intent understanding. A direct competitor." },
+            { name: "Cvent", industry: "information technology & services", category: "Customer", analysis: "Uses an event chatbot and a virtual assistant for product support. As a consumer of AI, they are a potential customer for automating attendee and user interactions." },
+            { name: "CX Consulting Partners", industry: "information technology & services", category: "Customer", analysis: "A CX consulting firm. Potential customer or channel partner to recommend Floatbot.ai to their clients." },
+            { name: "CXChronicles", industry: "information technology & services", category: "Customer", analysis: "An IT & services company. Potential customer for using AI to improve their service delivery." },
+            { name: "CXponent", industry: "information technology & services", category: "Vendor (Competitor)", analysis: "Offers conversational AI solutions to create natural-language interactions for customers and employees. A direct competitor." },
+            { name: "Cyara", industry: "information technology & services", category: "Partner", analysis: "Specializes in chatbot and voicebot testing, training, and optimization. Their QA solutions are complementary to Floatbot.ai's platform, making them a strong potential partner." },
+            { name: "D&M Enterprise Group", industry: "information technology & services", category: "Vendor (Competitor)", analysis: "Offers 'Enterprise Bot,' an omnichannel CX support suite including voice and chatbots. A direct competitor." },
+            { name: "Datamatics Global Services Ltd", industry: "information technology & services", category: "Vendor (Competitor)", analysis: "Offers customized, generative AI-powered chatbot solutions for customer interactions. A direct competitor." },
+            { name: "Datanitiv", industry: "information technology & services", category: "Customer", analysis: "An IT & services company. Potential customer for using AI internally or as a white-label solution." },
+            { name: "Decagon", industry: "information technology & services", category: "Vendor (Competitor)", analysis: "Offers enterprise-grade AI voice agents for hyper-realistic conversations. A direct competitor with a focus on advanced, agentic capabilities." },
+            { name: "Deepgram Inc", industry: "information technology & services", category: "Partner", analysis: "Provides high-accuracy, low-latency Voice AI components (speech-to-text, text-to-speech). As a provider of underlying tech, they are a strong potential partner to enhance Floatbot.ai's voice capabilities." },
+            { name: "delivery.com", industry: "information technology & services", category: "Customer", analysis: "A food delivery service. Potential customer for automating order tracking and customer support." },
+            { name: "Diabolocom UK Ltd", industry: "information technology & services", category: "Vendor (Competitor)", analysis: "Offers AI software including virtual agents and AI-as-a-service with modular, no-code solutions. A direct competitor." },
+            { name: "Dialpad", industry: "information technology & services", category: "Vendor (Competitor)", analysis: "Offers no-code virtual agents and AI for phone communications. A direct and significant competitor in the business communication AI space." },
+            { name: "DISH", industry: "telecommunications", category: "Customer", analysis: "A major telecommunications company. A prime customer candidate for large-scale customer service automation." },
+            { name: "DoorDash", industry: "information technology & services", category: "Customer", analysis: "A food delivery service. Potential customer for automating customer and driver support, as well as order management." },
+            { name: "EarthLink", industry: "telecommunications", category: "Customer", analysis: "A telecom provider. A strong candidate for using conversational AI to handle customer support and sales inquiries." },
+            { name: "EBG", industry: "information technology & services", category: "Customer", analysis: "An e-commerce and travel company. A potential customer for automating bookings, customer service, and personalized recommendations." },
+            { name: "ECHO Health", industry: "information technology & services", category: "Customer", analysis: "A healthcare payment processing company. A potential customer for automating provider and patient inquiries regarding payments and claims." },
+            { name: "Eckoh UK Limited", industry: "information technology & services", category: "Vendor (Competitor)", analysis: "Provides secure payment and customer service solutions, including conversational AI and voice biometrics. A competitor in the secure CX space." },
+            { name: "EE", industry: "telecommunications", category: "Customer", analysis: "A major UK telecom provider. A prime candidate for customer service automation." },
+            { name: "eGain Corporation", industry: "information technology & services", category: "Vendor (Competitor)", analysis: "A long-standing provider of customer engagement solutions, including conversational AI, virtual assistants, and knowledge management. A direct competitor." },
+            { name: "Elvee", industry: "information technology & services", category: "Customer", analysis: "An IT & services company. Potential customer for using conversational AI internally or as a white-label solution." },
+            { name: "Ema", industry: "information technology & services", category: "Vendor (Competitor)", analysis: "Offers a 'Universal AI Employee' platform to automate tasks across various business functions. A competitor in the broader enterprise automation space." },
+            { name: "Emailgistics Corp.", industry: "information technology & services", category: "Partner", analysis: "Provides intelligent email routing and workflow automation for shared mailboxes. Their focus on email is complementary to Floatbot.ai's broader omnichannel capabilities, creating a potential integration partnership." },
+            { name: "em-tel communications corp", industry: "telecommunications", category: "Customer", analysis: "A telecom company. A potential customer for automating their customer support and sales processes." },
+            { name: "Engine", industry: "information technology & services", category: "Customer", analysis: "An IT & services company. Potential customer for using conversational AI to improve their operational efficiency." },
+            { name: "Expertflow", industry: "information technology & services", category: "Vendor (Competitor)", analysis: "Provides customer communication solutions, including chatbots and voicebots, often integrated with Cisco and other platforms. A competitor, often as a systems integrator." },
+            { name: "Fanatics", industry: "information technology & services", category: "Customer", analysis: "An online retailer of licensed sportswear. A prime customer for e-commerce customer service automation, handling order inquiries, returns, and product questions." },
+            { name: "First Class Connection", industry: "telecommunications", category: "Customer", analysis: "A telecom service provider. Potential customer for automating their customer support." },
+            { name: "First Orion", industry: "telecommunications", category: "Partner", analysis: "Specializes in branded communication and call protection solutions. Their focus on authenticating calls and providing rich call data is complementary to Floatbot.ai's voicebots, making them a potential partner for enhanced, secure voice interactions." },
+            { name: "Five9", industry: "information technology & services", category: "Vendor (Competitor)", analysis: "A leading provider of cloud contact center software, including an Intelligent Virtual Agent (IVA) for voice and digital channels. A major and direct competitor." },
+            { name: "Flip (formerly RedRoute)", industry: "information technology & services", category: "Vendor (Competitor)", analysis: "Offers a voice AI platform that automates customer service calls for e-commerce brands. A direct competitor with a specific vertical focus." },
+            { name: "Forethought", industry: "information technology & services", category: "Vendor (Competitor)", analysis: "Offers 'SupportGPT™,' a generative AI platform for customer support that includes AI agents for triage, deflection, and agent assistance. A direct competitor." },
+            { name: "FreeClimb", industry: "information technology & services", category: "Vendor (Competitor)", analysis: "A communications platform (CPaaS) that allows developers to build voice and messaging applications. A platform-level competitor, similar to Twilio." },
+            { name: "Freshworks", industry: "information technology & services", category: "Vendor (Competitor)", analysis: "Provides a suite of business software, including 'Freddy AI,' which powers chatbots and agent assist features within their CRM and customer support products. A direct competitor with an integrated suite." },
+            { name: "Front", industry: "information technology & services", category: "Partner", analysis: "A customer communication hub that centralizes email, chat, and other channels. They integrate with other apps, making them a potential partner where Floatbot.ai could be an integrated chatbot/voicebot solution." },
+            { name: "GemShelf Inc", industry: "information technology & services", category: "Customer", analysis: "An IT & services company. Potential customer for internal or external AI automation." },
+            { name: "Genesys", industry: "information technology & services", category: "Vendor (Competitor)", analysis: "One of the largest contact center technology providers in the world, with a comprehensive suite of AI tools, including voicebots, chatbots, and predictive engagement. A major and direct competitor." },
+            { name: "Genesys Cloud Services, Inc.", industry: "information technology & services", category: "Vendor (Competitor)", analysis: "Duplicate of Genesys. Major competitor." },
+            { name: "Genuine Technology Consulting", industry: "IT Services & Technology Consulting", category: "Customer", analysis: "A consulting firm. Potential customer or channel partner." },
+            { name: "Gladly Software Inc", industry: "information technology & services", category: "Vendor (Competitor)", analysis: "A customer service platform centered around the customer, not tickets. They offer 'Gladly Sidekick,' an AI-powered assistant, making them a competitor." },
+            { name: "Glia", industry: "information technology & services", category: "Vendor (Competitor)", analysis: "Provides a 'Digital Customer Service' platform with AI-powered chatbots and agent assistance, focusing on seamless on-screen collaboration. A direct competitor." },
+            { name: "gmail.de", industry: "information technology & services", category: "Customer", analysis: "This is likely a user error or a generic domain. Assuming it represents a business using Gmail, they would be a customer for AI solutions, not a provider." },
+            { name: "Google", industry: "information technology & services", category: "Vendor (Competitor)", analysis: "Through Google Cloud (Dialogflow, Contact Center AI), Google provides foundational AI tools that are a core part of the competitive landscape. A major platform-level competitor." },
+            { name: "Grazitti Interactive", industry: "information technology & services", category: "Partner", analysis: "A marketing technology and services company. They could be a partner, implementing Floatbot.ai solutions as part of broader marketing and CX projects for their clients." },
+            { name: "Greatland Corporation", industry: "information technology & services", category: "Customer", analysis: "Provides business forms, tax forms, and filing services. Potential customer for automating support inquiries related to their products and services." },
+            { name: "Groupon", industry: "information technology & services", category: "Customer", analysis: "An e-commerce marketplace. Potential customer for automating customer and merchant support." },
+            { name: "Grubhub", industry: "information technology & services", category: "Customer", analysis: "A food delivery service. Potential customer for automating support for diners, restaurants, and drivers." },
+            { name: "Grubhub Inc.", industry: "information technology & services", category: "Customer", analysis: "Duplicate of Grubhub. Potential customer." },
+            { name: "Gusto, Inc.", industry: "information technology & services", category: "Customer", analysis: "Provides a platform for payroll, benefits, and HR. A prime customer candidate for automating HR and payroll-related support questions for their clients." },
+            { name: "Hexaware Technologies Inc", industry: "information technology & services", category: "Vendor (Competitor)", analysis: "A global IT services company that provides digital transformation services, including conversational AI and automation solutions. They compete as a service provider and systems integrator." },
+            { name: "Hinduja Global Solutions Ltd.", industry: "information technology & services", category: "Vendor (Competitor)", analysis: "A major BPO and CX provider that offers digital solutions, including AI and automation, to its clients. A direct competitor in the BPO space." },
+            { name: "Hire Hints Massage", industry: "IT Services and IT Consulting", category: "Customer", analysis: "Likely a small business. A potential customer for a simple appointment booking or FAQ bot." },
+            { name: "Hiya Inc", industry: "information technology & services", category: "Partner", analysis: "Specializes in branded caller ID and spam protection. Their services are complementary to Floatbot.ai's voicebots, creating a partnership opportunity for enhanced and trusted voice communication." },
+            { name: "Hopper", industry: "information technology & services", category: "Customer", analysis: "A travel app that uses predictive analytics. A prime customer candidate for automating travel booking inquiries, cancellations, and customer support." },
+            { name: "HyBRAIN Development", industry: "information technology & services", category: "Customer", analysis: "A software development company. Potential customer for internal AI tools or as a partner integrating Floatbot.ai into client projects." },
+            { name: "ibm", industry: "information technology & services", category: "Vendor (Competitor)", analysis: "A major technology company with its own comprehensive AI platform, 'watsonx,' which includes conversational AI capabilities (watsonx Assistant). A major and direct competitor." },
+            { name: "IBM Canada", industry: "information technology & services", category: "Vendor (Competitor)", analysis: "Duplicate of IBM. Major competitor." },
+            { name: "Id.me", industry: "information technology & services", category: "Customer", analysis: "An identity verification network. A potential customer for automating user support during the identity verification process." },
+            { name: "Industry Dive", industry: "information technology & services", category: "Customer", analysis: "A business journalism company. Not a competitor. Could potentially use AI for internal research tools." },
+            { name: "Infosys Limited", industry: "information technology & services", category: "Vendor (Competitor)", analysis: "A global IT services and consulting giant. They offer digital transformation services that include building and implementing AI and automation solutions. A competitor on the services/integration front." },
+            { name: "InfyniteOne", industry: "information technology & services", category: "Customer", analysis: "An IT services company. Potential customer for internal or external automation." },
+            { name: "InMoment", industry: "information technology & services", category: "Partner", analysis: "An experience improvement (XI) platform that gathers feedback and analytics. Their focus on analytics is complementary to Floatbot.ai's automation. A potential partnership to provide a closed loop of action (Floatbot.ai) and measurement (InMoment)." },
+            { name: "Insight7", industry: "information technology & services", category: "Partner", analysis: "An AI platform for product teams that analyzes customer feedback from various sources. Their analytics capabilities are complementary, creating a partnership opportunity to feed insights into Floatbot.ai's conversational design." },
+            { name: "IntelliBPO", industry: "information technology & services", category: "Customer", analysis: "A BPO provider. A prime customer candidate to use Floatbot.ai to enhance their service offerings to their own clients." },
+            { name: "Intellicus Technologies", industry: "information technology & services", category: "Partner", analysis: "A business intelligence and analytics platform. Their data visualization capabilities could be a complementary partner integration for Floatbot.ai's interaction analytics." },
+            { name: "Interactions LLC", industry: "information technology & services", category: "Vendor (Competitor)", analysis: "A company specializing in Intelligent Virtual Assistants (IVAs) for enterprise customer care. A direct competitor in the conversational AI space." },
+            { name: "Intercom", industry: "information technology & services", category: "Vendor (Competitor)", analysis: "A leading customer communications platform that has heavily invested in AI, including their own AI chatbot, 'Fin'. A direct and significant competitor." },
+            { name: "InterVision Systems LLC", industry: "information technology & services", category: "Customer", analysis: "An IT strategic service provider. A potential customer or a channel partner who could resell or implement Floatbot.ai." },
+            { name: "Intuit", industry: "information technology & services", category: "Customer", analysis: "A financial software company (QuickBooks, TurboTax). A prime customer candidate for automating support for their massive user base." },
+            { name: "Invoca", industry: "information technology & services", category: "Partner", analysis: "A conversation intelligence platform for marketing and sales that analyzes phone calls. Their analytics on inbound calls is complementary to Floatbot.ai's automation capabilities, creating a strong partnership potential." },
+            { name: "Iris", industry: "information technology & services", category: "Customer", analysis: "An IT & services company. Potential customer." },
+            { name: "isp.net", industry: "information technology & services", category: "Customer", analysis: "An internet service provider. A prime customer for automating technical support, billing inquiries, and sales." },
+            { name: "IT PARK UZBEKISTAN", industry: "information technology & services", category: "Customer", analysis: "A technology park. Potential customer for providing AI tools to their resident startups or for their own administrative purposes." },
+            { name: "ITCON Services", industry: "information technology & services", category: "Customer", analysis: "An IT services company. Potential customer." },
+            { name: "izzi telecom", industry: "telecommunications", category: "Customer", analysis: "A major telecom provider in Mexico. A prime customer for large-scale customer service automation." },
+            { name: "Journeyfront Inc", industry: "information technology & services", category: "Customer", analysis: "A hiring software platform. Potential customer for automating candidate screening or support for their users." },
+            { name: "Kapsch TrafficCom North America", industry: "information technology & services", category: "Customer", analysis: "Provides intelligent transportation systems. Potential customer for automating support for their systems or for government clients." },
+            { name: "Kodif", industry: "information technology & services", category: "Vendor (Competitor)", analysis: "An AI platform for building internal tools and workflows. Competes in the broader enterprise automation space." },
+            { name: "Kore.ai", industry: "information technology & services", category: "Vendor (Competitor)", analysis: "A major conversational AI platform provider for enterprises, offering solutions for customer experience, employee experience, and agent assist. A direct and significant competitor." },
+            { name: "Krisp Technologies Inc", industry: "information technology & services", category: "Partner", analysis: "Provides AI-powered noise cancellation and voice clarity technology. Their tech is highly complementary to Floatbot.ai's voicebots, making them a strong potential partner to improve voice quality." },
+            { name: "KT", industry: "telecommunications", category: "Customer", analysis: "A major South Korean telecommunications company. A prime customer for large-scale customer service automation." },
+            { name: "Kyvos", industry: "information technology & services", category: "Partner", analysis: "A cloud BI acceleration platform. Their ability to query massive datasets could be a complementary backend for very complex, data-intensive AI agent use cases. Potential partner." },
+            { name: "Laivly", industry: "information technology & services", category: "Vendor (Competitor)", analysis: "Offers a platform that combines AI and human agents for customer service. A direct competitor in the hybrid human-AI CX space." },
+            { name: "Language I/O", industry: "information technology & services", category: "Partner", analysis: "Specializes in real-time, multilingual customer support translation. Their deep translation expertise could be a valuable partnership to enhance Floatbot.ai's multi-language capabilities." },
+            { name: "Lenovo", industry: "information technology & services", category: "Customer", analysis: "A major technology and electronics company. A prime customer for automating technical support and sales inquiries for their wide range of products." },
+            { name: "Level AI", industry: "information technology & services", category: "Vendor (Competitor)", analysis: "Offers an AI platform for contact centers focused on quality assurance and agent assist. Competes directly in the agent assist space and a portion of the automation market." },
+            { name: "Liberate", industry: "information technology & services", category: "Customer", analysis: "An IT & services company. Potential customer." },
+            { name: "LivePerson, Inc.", industry: "information technology & services", category: "Vendor (Competitor)", analysis: "A global leader in conversational AI and messaging solutions for enterprises. A major and direct competitor." },
+            { name: "LivePrinting", industry: "information technology & services", category: "Customer", analysis: "A printing services company. Potential customer for automating order inquiries and customer support." },
+            { name: "LiveX AI Inc", industry: "information technology & services", category: "Vendor (Competitor)", analysis: "Offers AI solutions for live experiences. Depending on the specifics, they are likely a competitor in some niche of conversational AI." },
+            { name: "LiveXchange Technologies", industry: "information technology & services", category: "Customer", analysis: "A BPO and contact center services provider. A potential customer to use Floatbot.ai to power their services." },
+            { name: "LogiSense", industry: "information technology & services", category: "Customer", analysis: "A subscription and usage-based billing platform. A potential customer for automating complex billing-related inquiries." },
+            { name: "Loren Meirose LLC", industry: "information technology & services", category: "Customer", analysis: "A consulting firm. Potential customer or channel partner." },
+            { name: "Lorikeet", industry: "information technology & services", category: "Partner", analysis: "An AI tool for generating slide decks and presentations. Not a competitor. Could be a very niche partner if conversational data needed to be presented." },
+            { name: "Loris.ai Inc", industry: "information technology & services", category: "Partner", analysis: "An AI platform providing real-time coaching and guidance for customer service agents, with a focus on empathy and language. Their agent-assist focus is complementary, making them a potential partner." },
+            { name: "Lumina Datamatics", industry: "information technology & services", category: "Customer", analysis: "Provides content and data services. Potential customer for internal automation or to enhance their service offerings." },
+            { name: "MaestroQA", industry: "information technology & services", category: "Partner", analysis: "A quality assurance platform for customer service teams. Their QA tools are complementary to Floatbot.ai's automation, creating a partnership opportunity to measure and improve AI interaction quality." },
+            { name: "Maplebear Inc", industry: "information technology & services", category: "Customer", analysis: "The parent company of Instacart. A prime customer for automating support for shoppers, customers, and retail partners." },
+            { name: "Mastercard", industry: "information technology & services", category: "Customer", analysis: "A global financial services corporation. A prime customer for automating cardholder and merchant support, as well as fraud alerts and inquiries, fitting Floatbot.ai's target finance industry." },
+            { name: "Matrix Networks", industry: "information technology & services", category: "Customer", analysis: "An IT solutions provider. A potential customer or channel partner/reseller." },
+            { name: "Medallia", industry: "information technology & services", category: "Partner", analysis: "A leader in customer and employee experience management. Their platform for capturing and analyzing experience data is complementary to Floatbot.ai's automation, creating a powerful 'analyze and act' partnership opportunity." },
+            { name: "Medallia Inc", industry: "information technology & services", category: "Partner", analysis: "Duplicate of Medallia. Potential partner." },
+            { name: "Meridian Group International", industry: "information technology & services", category: "Customer", analysis: "An IT services and equipment leasing company. Potential customer or channel partner." },
+            { name: "Meta Platforms, Inc.", industry: "information technology & services", category: "Vendor (Competitor)", analysis: "Developing their own advanced AI and LLMs (like Llama). While not selling a direct CCaaS product, their foundational AI research and platforms (like Messenger and WhatsApp) make them a major force and platform-level competitor." },
+            { name: "Metric Sherpa", industry: "information technology & services", category: "Customer", analysis: "A consulting firm focused on metrics and analytics. Potential channel partner." },
+            { name: "Metronet", industry: "telecommunications", category: "Customer", analysis: "A fiber internet provider. A prime customer for automating technical support, billing, and sales." },
+            { name: "Metropolis", industry: "information technology & services", category: "Customer", analysis: "An AI and computer vision company for parking and real estate. Potential customer for automating their customer support." },
+            { name: "MiaRec", industry: "information technology & services", category: "Partner", analysis: "Provides call recording and voice analytics software for contact centers. Their analytics capabilities are complementary to Floatbot.ai's automation platform, making them a potential partner." },
+            { name: "Microsoft", industry: "information technology & services", category: "Vendor (Competitor)", analysis: "A major technology company with a vast AI ecosystem (Azure AI, Copilot Studio). They are a direct and significant competitor on both the platform and application level." },
+            { name: "Miratech", industry: "information technology & services", category: "Customer", analysis: "An IT services and outsourcing company. Potential customer or channel partner." },
+            { name: "ModSquad", industry: "information technology & services", category: "Customer", analysis: "Provides digital engagement services, including customer support and content moderation. A potential customer to use Floatbot.ai's automation to augment their human agent services." },
+            { name: "Modulate", industry: "information technology & services", category: "Partner", analysis: "Offers 'ToxMod,' an AI-powered voice moderation tool to combat online toxicity. This is a highly complementary technology for any platform using voice, creating a strong partnership opportunity for safer voice interactions." },
+            { name: "Mosaicx", industry: "information technology & services", category: "Vendor (Competitor)", analysis: "Offers conversational AI solutions that leverage voice and messaging for customer service. A direct competitor." },
+            { name: "Movate", industry: "information technology & services", category: "Vendor (Competitor)", analysis: "A digital technology and customer experience services company that offers AI and automation solutions. Competes as a service provider and integrator." },
+            { name: "Mvision", industry: "telecommunications", category: "Customer", analysis: "A telecom services company. Potential customer." },
+            { name: "Nakama Tech Limited", industry: "information technology & services", category: "Customer", analysis: "An IT services company. Potential customer." },
+            { name: "Nectar Services", industry: "information technology & services", category: "Partner", analysis: "Provides monitoring and diagnostics software for UC and contact center platforms. Their monitoring tools are complementary to Floatbot.ai's operational platform, creating a partnership opportunity." },
+            { name: "Nelnet", industry: "information technology & services", category: "Customer", analysis: "A financial services company specializing in student loans. A prime customer for automating borrower inquiries, a core target vertical for Floatbot.ai." },
+            { name: "NeuraFlash", industry: "information technology & services", category: "Partner", analysis: "A consulting and implementation partner for Salesforce and AWS, with a focus on AI. They could be a key channel partner, implementing Floatbot.ai solutions for their clients." },
+            { name: "Nextiva Inc", industry: "information technology & services", category: "Vendor (Competitor)", analysis: "A business communications company that offers a suite of tools, including AI-powered features for customer engagement. A competitor in the broader UCaaS/CCaaS space." },
+            { name: "NICE Ltd", industry: "information technology & services", category: "Vendor (Competitor)", analysis: "A global leader in contact center software, offering a comprehensive suite of AI solutions under their 'CXone' platform, including self-service bots and agent assist. A major and direct competitor." },
+            { name: "NIPR", industry: "information technology & services", category: "Customer", analysis: "National Insurance Producer Registry. A prime customer in the insurance vertical for automating inquiries from insurance producers and regulators." },
+            { name: "NLX", industry: "information technology & services", category: "Vendor (Competitor)", analysis: "Offers a no-code conversational AI platform for creating voice, chat, and multimodal experiences. A direct competitor with a similar no-code positioning." },
+            { name: "NRTC", industry: "telecommunications", category: "Customer", analysis: "A member-driven technology cooperative for electric and telephone utilities. A potential customer to provide AI solutions to their member organizations." },
+            { name: "nurix.ai", industry: "information technology & services", category: "Vendor (Competitor)", analysis: "Offers an AI platform for customer service automation. Direct competitor." },
+            { name: "Observe.AI", industry: "information technology & services", category: "Vendor (Competitor)", analysis: "An intelligent workforce platform that uses AI for contact center conversation intelligence, QA, and agent coaching. Competes in the agent assist space and a portion of the automation market." },
+            { name: "OneCause Inc", industry: "information technology & services", category: "Customer", analysis: "Provides fundraising software for non-profits. A potential customer for automating donor support and event inquiries." },
+            { name: "OneConnect, Inc", industry: "telecommunications", category: "Customer", analysis: "A telecom services provider. Potential customer." },
+            { name: "ONR BespokeCX", industry: "information technology & services", category: "Customer", analysis: "A customer experience consulting firm. Potential customer or channel partner." },
+            { name: "OpenFin Inc", industry: "information technology & services", category: "Customer", analysis: "An operating system for finance. Potential customer to integrate conversational AI tools for traders and financial professionals on their platform." },
+            { name: "Operata Pty Ltd", industry: "information technology & services", category: "Partner", analysis: "A performance monitoring and assurance platform for cloud contact centers. Their monitoring tools are complementary to Floatbot.ai's operational platform, creating a partnership opportunity." },
+            { name: "Order.co", industry: "information technology & services", category: "Customer", analysis: "A platform for managing business purchasing. Potential customer for automating support for their users and suppliers." },
+            { name: "Outbound IQ", industry: "information technology & services", category: "Vendor (Competitor)", analysis: "Offers AI-powered outbound calling solutions. A direct competitor in the outbound voice automation space." },
+            { name: "OzarksGo", industry: "telecommunications", category: "Customer", analysis: "A fiber internet and telecommunications subsidiary of an electric cooperative. Prime customer for automating member support." },
+            { name: "Parloa", industry: "information technology & services", category: "Vendor (Competitor)", analysis: "A conversational AI platform for automating customer service with voice and chatbots. A direct competitor, particularly strong in the European market." },
+            { name: "PARTS iD Inc", industry: "information technology & services", category: "Customer", analysis: "An online retailer of automotive parts. A prime customer for automating support related to part fitment, order status, and returns." },
+            { name: "Pavlov Media", industry: "information technology & services", category: "Customer", analysis: "A provider of internet and video services, primarily for off-campus student housing. A potential customer for automating resident support." },
+            { name: "Pegasystems", industry: "information technology & services", category: "Vendor (Competitor)", analysis: "A major software company for CRM and BPM, with its own AI and automation capabilities, including conversational bots, integrated into its platform. A direct competitor." },
+            { name: "PeopleConnect", industry: "information technology & services", category: "Customer", analysis: "Owns public records search services. A potential customer for automating user support inquiries." },
+            { name: "Perficient, Inc.", industry: "information technology & services", category: "Partner", analysis: "A global digital consultancy. They could be a key channel and implementation partner for Floatbot.ai." },
+            { name: "Phound", industry: "telecommunications", category: "Customer", analysis: "A telecom services provider. Potential customer." },
+            { name: "Pipkins, Inc.", industry: "information technology & services", category: "Partner", analysis: "A provider of workforce management (WFM) software. Their WFM tools are complementary to Floatbot.ai's automation, making them a potential partner." },
+            { name: "Plura", industry: "information technology & services", category: "Customer", analysis: "An IT & services company. Potential customer." },
+            { name: "PlusOne Company", industry: "telecommunications", category: "Customer", analysis: "A telecom services provider. Potential customer." },
+            { name: "PolyAI", industry: "information technology & services", category: "Vendor (Competitor)", analysis: "Offers customer-led voice assistants that can handle complex, natural conversations over the phone. A direct and sophisticated competitor in the voice AI space." },
+            { name: "PossibleNOW", industry: "information technology & services", category: "Partner", analysis: "Specializes in enterprise consent and preference management. Their compliance solutions are complementary to Floatbot.ai's engagement platform, creating a partnership opportunity for compliant communication." },
+            { name: "PrePass, LLC", industry: "information technology & services", category: "Customer", analysis: "Provides weigh station bypass and toll payment services for trucking. A potential customer for automating driver support." },
+            { name: "Prescryptive", industry: "information technology & services", category: "Customer", analysis: "A healthcare technology company for prescription management. A potential customer for automating patient and pharmacy support." },
+            { name: "Priceline.com LLC", industry: "information technology & services", category: "Customer", analysis: "An online travel agency. A prime customer for automating booking inquiries, changes, and support." },
+            { name: "Primeshare", industry: "information technology & services", category: "Customer", analysis: "A secure file sharing and collaboration platform. Potential customer for internal or user-facing support automation." },
+            { name: "ProcedureFlow", industry: "information technology & services", category: "Partner", analysis: "A knowledge management tool that visualizes procedures. Could be a powerful partner by providing the structured knowledge base that Floatbot.ai's AI agents use to answer questions." },
+            { name: "ProfitSolv", industry: "information technology & services", category: "Customer", analysis: "Provides billing and payment software for professional services firms. Potential customer for automating user support." },
+            { name: "Propel", industry: "information technology & services", category: "Customer", analysis: "A product lifecycle management (PLM) platform. Potential customer for internal or user-facing support automation." },
+            { name: "Prophecy Americas Inc", industry: "information technology & services", category: "Partner", analysis: "Offers CX and contact center analytics software. Their analytics tools are complementary, making them a potential partner." },
+            { name: "Proponisi", industry: "information technology & services", category: "Customer", analysis: "An IT consulting firm. Potential customer or channel partner." },
+            { name: "Prosidca", industry: "information technology & services", category: "Customer", analysis: "An IT services company. Potential customer." },
+            { name: "PSI Services", industry: "information technology & services", category: "Customer", analysis: "A workforce solutions provider offering testing and certification services. Potential customer for automating candidate and client support." },
+            { name: "PSI Services LLC", industry: "information technology & services", category: "Customer", analysis: "Duplicate of PSI Services. Potential customer." },
+            { name: "PTP", industry: "information technology & services", category: "Customer", analysis: "An IT consulting and services firm. Potential customer or channel partner." },
+            { name: "Qualtrics International Inc.", industry: "information technology & services", category: "Partner", analysis: "A leader in experience management (XM). Their platform for analyzing customer feedback could be a powerful partner integration, creating a loop of collecting feedback (Qualtrics) and acting on it (Floatbot.ai)." },
+            { name: "Quantanite", industry: "information technology & services", category: "Customer", analysis: "A customer experience and digital outsourcing provider. A prime customer to use Floatbot.ai to enhance their service offerings." },
+            { name: "Quantum Metric", industry: "information technology & services", category: "Partner", analysis: "A continuous product design platform that helps understand customer behavior on web and mobile. Their analytics are complementary to identify friction points that Floatbot.ai could then help resolve." },
+            { name: "QuinStreet Inc", industry: "information technology & services", category: "Customer", analysis: "A performance marketing technology company. A potential customer for automating lead qualification and nurturing." },
+            { name: "Quiq", industry: "information technology & services", category: "Vendor (Competitor)", analysis: "A conversational AI and messaging platform for customer service. A direct competitor." },
+            { name: "RapidTalk.ai", industry: "information technology & services", category: "Vendor (Competitor)", analysis: "Offers AI voice agents for sales and customer service calls. A direct competitor in the voice AI space." },
+            { name: "Rasa Technologies Inc", industry: "information technology & services", category: "Vendor (Competitor)", analysis: "A popular open-source conversational AI platform for building enterprise-grade chatbots and voice assistants. A significant competitor, especially for teams with in-house developers." },
+            { name: "ReadyMode", industry: "information technology & services", category: "Vendor (Competitor)", analysis: "An all-in-one predictive dialer that includes some automation features. Competes in the outbound contact center space." },
+            { name: "ReflexAI", industry: "information technology & services", category: "Partner", analysis: "Provides AI-powered real-time coaching for contact center agents. Their focus on agent assistance is complementary to Floatbot.ai's automation." },
+            { name: "ReForge", industry: "information technology & services", category: "Customer", analysis: "An education platform for professionals. A potential customer for automating support for their students." },
+            { name: "Relative Insight", industry: "information technology & services", category: "Partner", analysis: "A text analysis platform that compares language to uncover insights. Their deep analytics capabilities could be a valuable partner for conversational design and analysis." },
+            { name: "Remote Agent Pools", industry: "telecommunications", category: "Customer", analysis: "A provider of remote contact center agents. A potential customer to augment their human agents with Floatbot.ai's automation." },
+            { name: "Replicant Solutions Inc", industry: "information technology & services", category: "Vendor (Competitor)", analysis: "A leading provider of 'Thinking Machines' for customer service, offering highly autonomous voice AI agents. A direct and sophisticated competitor." },
+            { name: "Retell AI", industry: "information technology & services", category: "Partner", analysis: "Provides a conversational voice AI API for developers, focusing on low-latency and human-like interactions. As an API provider, they are a potential partner to power Floatbot.ai's voice infrastructure." },
+            { name: "RingCentral Inc", industry: "information technology & services", category: "Vendor (Competitor)", analysis: "A major provider of cloud communications (UCaaS/CCaaS) with integrated AI features for virtual agents and agent assist. A direct competitor." },
+            { name: "Roblox", industry: "information technology & services", category: "Customer", analysis: "A massive online gaming platform. A prime customer for automating support for their huge community of users and developers." },
+            { name: "Roojoom", industry: "information technology & services", category: "Customer", analysis: "A platform for creating guided digital experiences. Potential customer for integrating conversational elements into their experiences." },
+            { name: "Salesforce", industry: "information technology & services", category: "Vendor (Competitor)", analysis: "A global leader in CRM. Their 'Einstein' AI platform includes conversational bots and is deeply integrated into their ecosystem, making them a major competitor." },
+            { name: "Salesforce, Inc.", industry: "information technology & services", category: "Vendor (Competitor)", analysis: "Duplicate of Salesforce. Major competitor." },
+            { name: "Sanas.AI Inc", industry: "information technology & services", category: "Partner", analysis: "Provides real-time accent translation technology. This is a unique and highly complementary service for voicebots, making them a strong potential partner." },
+            { name: "Satisfai", industry: "information technology & services", category: "Vendor (Competitor)", analysis: "Offers AI solutions for customer service automation. Direct competitor." },
+            { name: "SeatGeek", industry: "information technology & services", category: "Customer", analysis: "A mobile-focused ticket platform. A prime customer for automating inquiries about tickets, events, and payments." },
+            { name: "SendBird", industry: "information technology & services", category: "Vendor (Competitor)", analysis: "Provides chat, voice, and video APIs for mobile apps and websites. They also offer AI chatbots, making them a competitor on both the platform and application level." },
+            { name: "SequenceShift", industry: "information technology & services", category: "Customer", analysis: "A consulting and implementation partner, particularly for Amazon Connect. Potential channel partner." },
+            { name: "ServiceNow", industry: "information technology & services", category: "Vendor (Competitor)", analysis: "A major enterprise workflow automation platform. Their 'Now Assist' generative AI is integrated across their platform, including virtual agents for IT and customer service. A direct competitor." },
+            { name: "Servion Global Solutions", industry: "information technology & services", category: "Vendor (Competitor)", analysis: "A customer experience management and digital transformation company that implements AI and automation solutions. A competitor on the services/integration front." },
+            { name: "SESTEK", industry: "information technology & services", category: "Vendor (Competitor)", analysis: "A technology company specializing in conversational AI solutions, including voice biometrics, speech recognition, and virtual assistants. A direct competitor." },
+            { name: "SETAR NV", industry: "telecommunications", category: "Customer", analysis: "A telecom provider in Aruba. A potential customer for service automation." },
+            { name: "Shipt Inc", industry: "information technology & services", category: "Customer", analysis: "A same-day delivery service. A prime customer for automating support for shoppers and customers." },
+            { name: "Sierra", industry: "information technology & services", category: "Vendor (Competitor)", analysis: "A new conversational AI platform from the founders of Replicant, aimed at building enterprise agents. A direct competitor." },
+            { name: "Skylux Inc", industry: "information technology & services", category: "Customer", analysis: "An IT & services company. Potential customer." },
+            { name: "SmartRent", industry: "information technology & services", category: "Customer", analysis: "A smart home automation platform for property managers. A potential customer for automating resident support and maintenance requests." },
+            { name: "Snap Recordings", industry: "telecommunications", category: "Partner", analysis: "Provides professional voice recordings for phone systems. Could be a partner for providing high-quality human voice prompts to be used alongside Floatbot.ai's synthesized voices." },
+            { name: "Snowflake", industry: "information technology & services", category: "Partner", analysis: "A cloud data platform. Not a direct competitor. A potential technology partner where Floatbot.ai could leverage data stored in Snowflake to power conversations." },
+            { name: "Solutions by Text", industry: "information technology & services", category: "Partner", analysis: "A compliant text messaging platform, particularly for finance. A potential partner to combine their compliant SMS infrastructure with Floatbot.ai's conversational intelligence." },
+            { name: "Sovos", industry: "information technology & services", category: "Customer", analysis: "A tax compliance and regulatory reporting software company. A potential customer for automating support related to complex tax and compliance questions." },
+            { name: "SPAR Solutions", industry: "information technology & services", category: "Customer", analysis: "An IT services and consulting company. Potential customer or channel partner." },
+            { name: "Spencer Technologies Inc", industry: "information technology & services", category: "Customer", analysis: "An IT solutions and services provider. Potential customer or channel partner." },
+            { name: "Spotify", industry: "information technology & services", category: "Customer", analysis: "A major music streaming service. A potential customer for automating user support for subscriptions, payments, and technical issues." },
+            { name: "Sprinklr", industry: "information technology & services", category: "Vendor (Competitor)", analysis: "A unified customer experience management (Unified-CXM) platform with a full suite of AI tools for social media, marketing, and customer care. A direct competitor." },
+            { name: "Square", industry: "information technology & services", category: "Customer", analysis: "A financial services and mobile payment company. A prime customer for automating support for their millions of small business clients." },
+            { name: "Squarespace", industry: "information technology & services", category: "Customer", analysis: "A website building and hosting company. A prime customer for automating support for their large user base." },
+            { name: "SS&C Technologies", industry: "information technology & services", category: "Vendor (Competitor)", analysis: "A global provider of financial services software and services. They offer AI and automation solutions within their product suite, making them a competitor in the finance vertical." },
+            { name: "SupportLogic Inc", industry: "information technology & services", category: "Partner", analysis: "An AI platform for support ticket analysis and proactive customer experience management. Their analytics and workflow tools are complementary to Floatbot.ai's automation." },
+            { name: "Surf Internet", industry: "telecommunications", category: "Customer", analysis: "A fiber internet provider. Prime customer for automating support and sales." },
+            { name: "Sutherland Global Services Inc", industry: "information technology & services", category: "Vendor (Competitor)", analysis: "A major BPO and digital transformation company that provides AI and automation services to its clients. A direct competitor." },
+            { name: "Swivel", industry: "information technology & services", category: "Customer", analysis: "A digital leasing platform for commercial real estate. Potential customer for automating inquiries from prospective tenants." },
+            { name: "Synthflow AI", industry: "information technology & services", category: "Vendor (Competitor)", analysis: "Offers a no-code platform for building AI voice agents for sales and appointment setting. A direct competitor." },
+            { name: "Talkdesk Inc", industry: "information technology & services", category: "Vendor (Competitor)", analysis: "A leading cloud contact center provider with a suite of AI tools, including virtual agents, agent assist, and QM automation. A major and direct competitor." },
+            { name: "TASKE Technology, Inc.", industry: "information technology & services", category: "Partner", analysis: "Provides contact center reporting and real-time management software. Their analytics are complementary to Floatbot.ai's automation platform." },
+            { name: "Tata Communications Limited", industry: "telecommunications", category: "Customer", analysis: "A global telecommunications provider. A potential customer for automating enterprise customer support." },
+            { name: "TaxSlayer LLC", industry: "information technology & services", category: "Customer", analysis: "An online tax preparation software company. A prime customer for automating taxpayer support during tax season." },
+            { name: "Tech Mahindra Ltd", industry: "information technology & services", category: "Vendor (Competitor)", analysis: "A global IT services and consulting company that implements AI and digital transformation solutions. A competitor on the services/integration front." },
+            { name: "TechMatrix Corporation", industry: "information technology & services", category: "Customer", analysis: "An IT services company. Potential customer or channel partner." },
+            { name: "TechSee Augmented Vision Inc", industry: "information technology & services", category: "Partner", analysis: "Provides AI-powered visual assistance for customer service (e.g., using a phone's camera). This is a highly complementary technology to combine with Floatbot.ai's voice/chat for multimodal support." },
+            { name: "Tekvision", industry: "information technology & services", category: "Customer", analysis: "An IT services company. Potential customer." },
+            { name: "Tells.co", industry: "telecommunications", category: "Customer", analysis: "A telecom services provider. Potential customer." },
+            { name: "Telus", industry: "information technology & services", category: "Vendor (Competitor)", analysis: "A major Canadian telecom that also has a 'Telus International' division providing digital CX and AI solutions. A direct competitor." },
+            { name: "TELUS Corp.", industry: "information technology & services", category: "Vendor (Competitor)", analysis: "Duplicate of Telus. Major competitor." },
+            { name: "The Loops", industry: "information technology & services", category: "Partner", analysis: "An AI-powered platform that analyzes support conversations to provide insights. Their analytics are complementary to Floatbot.ai's automation." },
+            { name: "Think Future Technologies", industry: "information technology & services", category: "Customer", analysis: "A software development and testing company. Potential customer or partner." },
+            { name: "ThriftBooks", industry: "information technology & services", category: "Customer", analysis: "An online used book retailer. A prime customer for automating order inquiries and customer support." },
+            { name: "Thumbtack", industry: "information technology & services", category: "Customer", analysis: "An online marketplace for local professionals. A prime customer for automating support for both consumers and professionals on the platform." },
+            { name: "Thunder Consulting, Inc.", industry: "information technology & services", category: "Customer", analysis: "An IT consulting firm. Potential customer or channel partner." },
+            { name: "T-Mobile", industry: "telecommunications", category: "Customer", analysis: "A major wireless carrier. A prime customer for large-scale automation of customer care and sales." },
+            { name: "T-Mobile USA", industry: "telecommunications", category: "Customer", analysis: "Duplicate of T-Mobile. Potential customer." },
+            { name: "Tomato.ai", industry: "information technology & services", category: "Partner", analysis: "Provides an AI-powered solution for accent softening and neutralization in real-time for contact center agents. A highly complementary technology, similar to Sanas.AI, making them a strong potential partner." },
+            { name: "TouchPoint One", industry: "information technology & services", category: "Partner", analysis: "A performance management platform for contact centers. Their tools for managing agent performance are complementary to Floatbot.ai's automation." },
+            { name: "TPG TeleManagement", industry: "information technology & services", category: "Customer", analysis: "A telecom expense management company. Potential customer." },
+            { name: "TripAdvisor", industry: "information technology & services", category: "Customer", analysis: "A major online travel company. A prime customer for automating traveler inquiries, booking support, and review-related questions." },
+            { name: "TTECDigital", industry: "information technology & services", category: "Vendor (Competitor)", analysis: "The digital arm of TTEC, a major global CX provider. They design and build AI and automation solutions for clients, making them a direct competitor." },
+            { name: "Tucows Inc", industry: "information technology & services", category: "Customer", analysis: "An internet services company (domains, fiber). A potential customer for automating support across their various business lines." },
+            { name: "Turo", industry: "information technology & services", category: "Customer", analysis: "A peer-to-peer car sharing marketplace. A prime customer for automating support for both car owners (hosts) and renters." },
+            { name: "Twilio Inc.", industry: "information technology & services", category: "Vendor (Competitor)", analysis: "A leading customer engagement platform (CPaaS). With products like Twilio Flex and Autopilot for building conversational AI, they are a major competitor on the platform level." },
+            { name: "UJET Inc", industry: "information technology & services", category: "Vendor (Competitor)", analysis: "A cloud contact center provider with its own AI capabilities for automation and agent assistance. Now part of Google Cloud, making it a stronger competitor." },
+            { name: "Uniswap", industry: "information technology & services", category: "Customer", analysis: "A decentralized crypto exchange. A potential, though complex, customer for automating support for their user community in a highly technical domain." },
+            { name: "United States Cellular Corporation", industry: "telecommunications", category: "Customer", analysis: "A major US wireless carrier. A prime customer for customer service automation." },
+            { name: "Unitel", industry: "telecommunications", category: "Customer", analysis: "A telecom provider. Potential customer." },
+            { name: "Upland Software", industry: "information technology & services", category: "Vendor (Competitor)", analysis: "Offers a portfolio of enterprise software, including knowledge management and conversational AI solutions. A competitor." },
+            { name: "Ushur Inc", industry: "information technology & services", category: "Vendor (Competitor)", analysis: "An enterprise automation platform that uses AI for customer engagement, particularly strong in insurance and healthcare workflows. A direct competitor with a strong vertical focus." },
+            { name: "USU Solutions", industry: "information technology & services", category: "Vendor (Competitor)", analysis: "Offers a portfolio of enterprise software, including a knowledge management and self-service platform with AI capabilities. A competitor." },
+            { name: "Vail Systems Inc", industry: "information technology & services", category: "Vendor (Competitor)", analysis: "A technology company providing enhanced voice services and analytics. They have conversational AI capabilities, making them a competitor in the voice space." },
+            { name: "ValueLabs", industry: "information technology & services", category: "Customer", analysis: "A global technology services company. A potential customer or a partner to build solutions for clients using Floatbot.ai." },
+            { name: "Velrada", industry: "information technology & services", category: "Partner", analysis: "A Microsoft and an IT consulting partner. Could be a channel partner implementing Floatbot.ai." },
+            { name: "Vendelux", industry: "information technology & services", category: "Customer", analysis: "An event marketing platform. Potential customer to integrate conversational AI for attendee engagement." },
+            { name: "VERIDAS", industry: "information technology & services", category: "Partner", analysis: "Specializes in voice biometrics for identity verification. A highly complementary technology and a strong potential partner for secure voice interactions." },
+            { name: "Verint Systems Inc", industry: "information technology & services", category: "Vendor (Competitor)", analysis: "A global leader in customer engagement solutions, with a comprehensive suite of AI-powered tools for automation, analytics, and workforce management. A major and direct competitor." },
+            { name: "Verizon", industry: "information technology & services", category: "Customer", analysis: "A major telecommunications giant. A prime customer for automating their massive volume of customer service interactions." },
+            { name: "Versay Solutions", industry: "information technology & services", category: "Vendor (Competitor)", analysis: "Offers a conversational AI platform for automating customer interactions. A direct competitor." },
+            { name: "Vetty, Inc.", industry: "information technology & services", category: "Customer", analysis: "An AI-based background screening company. Potential customer for automating support for their clients and candidates." },
+            { name: "Virsae", industry: "telecommunications", category: "Partner", analysis: "A platform for monitoring and managing unified communications and contact center performance. Their monitoring tools are complementary to Floatbot.ai's platform." },
+            { name: "Vivid Seats LLC", industry: "information technology & services", category: "Customer", analysis: "An online ticket marketplace. A prime customer for automating support related to tickets, events, and user accounts." },
+            { name: "Vogent", industry: "information technology & services", category: "Customer", analysis: "An IT services company. Potential customer." },
+            { name: "Vonage Holdings Corp.", industry: "information technology & services", category: "Vendor (Competitor)", analysis: "A global cloud communications provider (CPaaS) with a suite of APIs and contact center solutions that include AI capabilities. A direct competitor." },
+            { name: "VTel", industry: "telecommunications", category: "Customer", analysis: "A telecom provider. Potential customer for service automation." },
+            { name: "Whatfix Inc", industry: "information technology & services", category: "Partner", analysis: "A digital adoption platform that provides in-app guidance and support. A potential partner to combine their visual guidance with Floatbot.ai's conversational support." },
+            { name: "Whippy", industry: "information technology & services", category: "Vendor (Competitor)", analysis: "Offers an AI sales agent for e-commerce, primarily over SMS. A direct competitor with a focus on a specific channel and use case." },
+            { name: "Williams-Sonoma", industry: "information technology & services", category: "Customer", analysis: "A major home goods retailer. A prime customer for automating support for orders, products, and a registry." },
+            { name: "Yardi", industry: "information technology & services", category: "Vendor (Competitor)", analysis: "A major provider of property management software. They offer their own chatbot and virtual assistant solutions for the real estate industry, making them a competitor." },
+            { name: "Yealink", industry: "telecommunications", category: "Customer", analysis: "A provider of communication hardware (like IP phones). Potential customer for automating their technical support and partner inquiries." },
+            { name: "Yellow Messenger", industry: "information technology & services", category: "Vendor (Competitor)", analysis: "Now part of Gupshup, they are a major conversational engagement platform provider. A direct and significant competitor." },
+            { name: "Zebra Technologies", industry: "information technology & services", category: "Customer", analysis: "A company specializing in enterprise mobile computing, barcode scanners, and printers. A potential customer for automating technical support for their products." },
+            { name: "Zenarate", industry: "information technology & services", category: "Partner", analysis: "An 'AI Coach' platform for developing customer service agent skills through simulation. Their training focus is complementary to Floatbot.ai's live automation, making them a strong potential partner." }
+        ];
+
+        const categoryColors = {
+            'Customer': { bg: 'bg-teal-100', text: 'text-teal-800', border: 'border-teal-300' },
+            'Partner': { bg: 'bg-sky-100', text: 'text-sky-800', border: 'border-sky-300' },
+            'Vendor (Competitor)': { bg: 'bg-rose-100', text: 'text-rose-800', border: 'border-rose-300' }
+        };
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const companyGrid = document.getElementById('company-grid');
+            const searchInput = document.getElementById('search-input');
+            const filters = document.getElementById('filters');
+            const noResults = document.getElementById('no-results');
+
+            const modal = document.getElementById('company-modal');
+            const modalContent = document.getElementById('modal-content');
+            const closeModalBtn = document.getElementById('close-modal');
+            
+            const modalTitle = document.getElementById('modal-title');
+            const modalIndustry = document.getElementById('modal-industry');
+            const modalAnalysis = document.getElementById('modal-analysis');
+            const modalCategory = document.getElementById('modal-category');
+
+            let currentFilter = 'all';
+            let categoryChart;
+
+            function getCategoryCounts() {
+                const counts = { Customer: 0, Partner: 0, 'Vendor (Competitor)': 0 };
+                companiesData.forEach(c => {
+                    if (counts.hasOwnProperty(c.category)) {
+                        counts[c.category]++;
+                    }
+                });
+                return counts;
+            }
+
+            function updateSummaryCards() {
+                const counts = getCategoryCounts();
+                document.getElementById('total-companies').textContent = companiesData.length;
+                document.getElementById('total-customers').textContent = counts.Customer;
+                document.getElementById('total-partners').textContent = counts.Partner;
+                document.getElementById('total-vendors').textContent = counts['Vendor (Competitor)'];
+            }
+
+            function renderChart() {
+                const counts = getCategoryCounts();
+                const ctx = document.getElementById('categoryChart').getContext('2d');
+                if (categoryChart) {
+                    categoryChart.destroy();
+                }
+                categoryChart = new Chart(ctx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: ['Customers', 'Partners', 'Vendors'],
+                        datasets: [{
+                            label: 'Company Categories',
+                            data: [counts.Customer, counts.Partner, counts['Vendor (Competitor)']],
+                            backgroundColor: [
+                                'rgb(13 148 136)', // Teal-600
+                                'rgb(2 132 199)', // Sky-600
+                                'rgb(225 29 72)'  // Rose-600
+                            ],
+                            borderColor: '#FDFBF8',
+                            borderWidth: 4,
+                            hoverOffset: 8
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        cutout: '65%',
+                        plugins: {
+                            legend: {
+                                position: 'bottom',
+                                labels: {
+                                    font: {
+                                        family: "'Inter', sans-serif"
+                                    },
+                                    usePointStyle: true,
+                                    padding: 20
+                                }
+                            },
+                            tooltip: {
+                                bodyFont: {
+                                    family: "'Inter', sans-serif"
+                                },
+                                titleFont: {
+                                     family: "'Inter', sans-serif"
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+
+            function renderCompanies() {
+                const searchTerm = searchInput.value.toLowerCase();
+                const filteredCompanies = companiesData.filter(company => {
+                    const matchesCategory = currentFilter === 'all' || company.category === currentFilter;
+                    const matchesSearch = company.name.toLowerCase().includes(searchTerm);
+                    return matchesCategory && matchesSearch;
+                });
+                
+                companyGrid.innerHTML = '';
+
+                if(filteredCompanies.length === 0){
+                    noResults.classList.remove('hidden');
+                } else {
+                    noResults.classList.add('hidden');
+                }
+
+                filteredCompanies.forEach(company => {
+                    const card = document.createElement('div');
+                    card.className = 'card bg-white p-4 rounded-xl border border-gray-200 cursor-pointer flex flex-col justify-between';
+                    
+                    const colors = categoryColors[company.category] || { bg: 'bg-gray-100', text: 'text-gray-800' };
+
+                    card.innerHTML = `
+                        <div>
+                           <h3 class="font-bold text-gray-800 truncate">${company.name}</h3>
+                           <p class="text-sm text-gray-500">${company.industry}</p>
+                        </div>
+                        <div class="mt-3">
+                           <span class="px-3 py-1 text-xs font-semibold rounded-full ${colors.bg} ${colors.text}">${company.category}</span>
+                        </div>
+                    `;
+                    card.addEventListener('click', () => openModal(company));
+                    companyGrid.appendChild(card);
+                });
+            }
+
+            function openModal(company) {
+                modalTitle.textContent = company.name;
+                modalIndustry.textContent = company.industry;
+                modalAnalysis.innerHTML = `<p>${company.analysis.replace(/\n/g, '</p><p>')}</p>`;
+                
+                const colors = categoryColors[company.category] || { bg: 'bg-gray-100', text: 'text-gray-800' };
+                modalCategory.className = `px-3 py-1 text-sm font-medium rounded-full ${colors.bg} ${colors.text}`;
+                modalCategory.textContent = company.category;
+
+                modal.classList.remove('opacity-0', 'pointer-events-none');
+                modalContent.classList.remove('scale-95');
+            }
+
+            function closeModal() {
+                modal.classList.add('opacity-0', 'pointer-events-none');
+                modalContent.classList.add('scale-95');
+            }
+
+            searchInput.addEventListener('keyup', renderCompanies);
+
+            filters.addEventListener('click', (e) => {
+                if (e.target.tagName === 'BUTTON') {
+                    currentFilter = e.target.dataset.filter;
+                    document.querySelectorAll('#filters .filter-btn').forEach(btn => btn.classList.remove('active'));
+                    e.target.classList.add('active');
+                    renderCompanies();
+                }
+            });
+
+            closeModalBtn.addEventListener('click', closeModal);
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) {
+                    closeModal();
+                }
+            });
+            document.addEventListener('keydown', (e) => {
+                if(e.key === 'Escape') closeModal();
+            })
+
+            updateSummaryCards();
+            renderChart();
+            renderCompanies();
+        });
+    </script>
+</body>
+</html>
